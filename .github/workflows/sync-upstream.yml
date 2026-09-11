@@ -1,0 +1,54 @@
+name: Sync upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
+      - name: Pull upstream and retain approved paths
+        env:
+          TARGET_BRANCH: ${{ github.ref_name }}
+          UPSTREAM_URL: https://github.com/coreyhaines31/marketingskills
+          UPSTREAM_BRANCH: main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          # Record upstream ancestry without importing its workflows or excluded files.
+          git pull --no-rebase --strategy=ours --no-commit --no-ff "$UPSTREAM_URL" "$UPSTREAM_BRANCH"
+          git restore --source=FETCH_HEAD --staged --worktree -- skills ':(top,glob,icase)LICENSE*'
+          keep=(
+            ':(top,exclude)skills'
+            ':(top,exclude,glob,icase)LICENSE*'
+            ':(top,exclude,literal).github/workflows/sync-upstream.yml'
+          )
+          git rm -r --force --ignore-unmatch -- . "${keep[@]}"
+
+          test -d skills
+          test -f LICENSE
+          test -f .github/workflows/sync-upstream.yml
+          test -z "$(git ls-files -- . "${keep[@]}")"
+          git diff --exit-code HEAD -- .github/workflows/sync-upstream.yml
+          git diff --cached --exit-code FETCH_HEAD -- skills ':(top,glob,icase)LICENSE*'
+
+          if git rev-parse --verify --quiet MERGE_HEAD >/dev/null || ! git diff --cached --quiet; then
+            git commit -m "chore: sync upstream skills"
+            git push origin "HEAD:$TARGET_BRANCH"
+          fi
