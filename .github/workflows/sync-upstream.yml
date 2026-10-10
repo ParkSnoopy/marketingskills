@@ -16,11 +16,12 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: actions/checkout@v4 - Check Out Fork
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.SYNC_TOKEN || github.token }}
-      - name: Pull upstream and retain approved paths
+      - name: bash - Merge Upstream and Retain Approved Paths
         env:
           TARGET_BRANCH: ${{ github.ref_name }}
           UPSTREAM_URL: https://github.com/coreyhaines31/marketingskills
@@ -31,9 +32,9 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
-          # Record upstream ancestry without importing its workflows or excluded files.
-          git pull --no-rebase --strategy=ours --no-commit --no-ff "$UPSTREAM_URL" "$UPSTREAM_BRANCH"
-          git restore --source=FETCH_HEAD --staged --worktree -- skills ':(top,glob,icase)LICENSE*'
+          git fetch "$UPSTREAM_URL" "$UPSTREAM_BRANCH"
+          git merge --no-commit --no-ff FETCH_HEAD
+          git restore --source=HEAD --staged --worktree -- .github/workflows/sync-upstream.yml
           keep=(
             ':(top,exclude)skills'
             ':(top,exclude,glob,icase)LICENSE*'
@@ -46,7 +47,6 @@ jobs:
           test -f .github/workflows/sync-upstream.yml
           test -z "$(git ls-files -- . "${keep[@]}")"
           git diff --exit-code HEAD -- .github/workflows/sync-upstream.yml
-          git diff --cached --exit-code FETCH_HEAD -- skills ':(top,glob,icase)LICENSE*'
 
           if git rev-parse --verify --quiet MERGE_HEAD >/dev/null || ! git diff --cached --quiet; then
             git commit -m "chore: sync upstream skills"
