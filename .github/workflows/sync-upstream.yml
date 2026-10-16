@@ -33,7 +33,12 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
           git fetch "$UPSTREAM_URL" "$UPSTREAM_BRANCH"
-          git merge --no-commit --no-ff FETCH_HEAD
+          if ! git merge --no-commit --no-ff FETCH_HEAD; then
+            test "$(git ls-files --unmerged)" != ""
+            git diff --name-only --diff-filter=U -z |
+              git --literal-pathspecs restore --source=FETCH_HEAD --staged --worktree \
+                --pathspec-from-file=- --pathspec-file-nul
+          fi
           git restore --source=HEAD --staged --worktree -- .github/workflows/sync-upstream.yml
           keep=(
             ':(top,exclude)skills'
@@ -45,7 +50,7 @@ jobs:
           test -d skills
           test -f LICENSE
           test -f .github/workflows/sync-upstream.yml
-          test -z "$(git ls-files -- . "${keep[@]}")"
+          test "$(git ls-files -- . "${keep[@]}")" = ""
           git diff --exit-code HEAD -- .github/workflows/sync-upstream.yml
 
           if git rev-parse --verify --quiet MERGE_HEAD >/dev/null || ! git diff --cached --quiet; then
