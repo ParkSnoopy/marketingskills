@@ -40,17 +40,22 @@ jobs:
                 --pathspec-from-file=- --pathspec-file-nul
           fi
           git restore --source=HEAD --staged --worktree -- .github/workflows/sync-upstream.yml
-          keep=(
-            ':(top,exclude)skills'
-            ':(top,exclude,glob,icase)LICENSE*'
-            ':(top,exclude,literal).github/workflows/sync-upstream.yml'
+          # Skills use the registry, integration guides, and zero-dependency CLIs.
+          retained=(
+            LICENSE
+            .github/workflows/sync-upstream.yml
+            skills/
+            tools/
           )
-          git rm -r --force --ignore-unmatch -- . "${keep[@]}"
+          excluded=(':(top,exclude,glob,icase)LICENSE*')
+          for file in "${retained[@]}"; do
+            excluded+=(":(top,exclude,literal)$file")
+          done
+          git rm -r --force --ignore-unmatch -- . "${excluded[@]}"
 
-          test -d skills
-          test -f LICENSE
+          test -d skills && test -f LICENSE
           test -f .github/workflows/sync-upstream.yml
-          test "$(git ls-files -- . "${keep[@]}")" = ""
+          test "$(git ls-files -- . "${excluded[@]}")" = ""
           git diff --exit-code HEAD -- .github/workflows/sync-upstream.yml
 
           if git rev-parse --verify --quiet MERGE_HEAD >/dev/null || ! git diff --cached --quiet; then
